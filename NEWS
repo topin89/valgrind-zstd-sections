@@ -26,6 +26,7 @@ bugzilla (https://bugs.kde.org/enter_bug.cgi?product=valgrind) rather
 than mailing the developers (or mailing lists) directly -- bugs that
 are not entered into bugzilla tend to get forgotten about or ignored.
 
+290061  pie elf always loaded at 0x108000
 276780  An instruction in fftw (Fast Fourier Transform) is unhandled by
         valgrind: vex x86->IR: unhandled instruction bytes:
         0x66 0xF 0x3A 0x2
