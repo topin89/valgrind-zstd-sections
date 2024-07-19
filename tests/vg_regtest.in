@@ -707,7 +707,7 @@ sub test_one_dir($$)
         } elsif ($f =~ /\.vgtest$/) {
             open(TSDIRLOG,">>","test-suite.log") or die $!; # it's enough for the per-directory file to exist for bunsen
             my $result = do_one_test($full_dir, $f);
-            print TSLOG scalar localtime, " result: $result $f.log\n";             
+            print TSLOG scalar localtime, " result: $result $full_dir/$f.log\n";             
             open(VGTESTTRS,">","$f.trs") or die "$!";
             print VGTESTTRS ":test-result: $result\n";
             print VGTESTTRS ":global-test-result: $result\n";
