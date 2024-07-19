@@ -195,7 +195,7 @@ my $default_stderr_filter = "filter_stderr";
 # open overall testsuite log that will contain records of all
 # subdirectory tests; it's not in automake format, but then again
 # nor are the per-subdirectory ones used as presence-flags for bunsen
-open(TSLOG, '>', 'test-suite.log') or die $!;
+open(TSLOG, '>', 'test-suite-overall.log') or die $!;
 
 
 #----------------------------------------------------------------------------
@@ -707,7 +707,7 @@ sub test_one_dir($$)
         } elsif ($f =~ /\.vgtest$/) {
             open(TSDIRLOG,">>","test-suite.log") or die $!; # it's enough for the per-directory file to exist for bunsen
             my $result = do_one_test($full_dir, $f);
-            print TSLOG scalar localtime, " result: $result\n";             
+            print TSLOG scalar localtime, " result: $result $f.log\n";             
             open(VGTESTTRS,">","$f.trs") or die "$!";
             print VGTESTTRS ":test-result: $result\n";
             print VGTESTTRS ":global-test-result: $result\n";
@@ -797,7 +797,7 @@ while (1) { # we will exit after one loop, unless looptillfail
             chdir($dir) or die "Could not change into $dir\n";
             
             my $result = do_one_test($dir, $file);
-            print TSLOG scalar localtime, " result: $result\n";
+            print TSLOG scalar localtime, " result: $result $dir/$file.log\n";
             open(VGTESTTRS,">","$dir/$file.trs") or die $!;
             print VGTESTTRS ":test-result: $result\n";
             print VGTESTTRS ":global-test-result: $result\n";

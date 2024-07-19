@@ -140,6 +140,7 @@ clean-local:
 	find . -name '*.vgtest.log' -print0 | xargs -r -0 rm
 	find . -name '*.vgtest.trs' -print0 | xargs -r -0 rm
 	find . -name test-suite.log -print0 | xargs -r -0 rm
+	find . -name test-suite-overall.log -print0 | xargs -r -0 rm
 
 # Need config.h in the installed tree, since some files depend on it
 pkginclude_HEADERS = config.h
