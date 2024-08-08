@@ -173,6 +173,7 @@ my $num_tests_done      = 0;
 my %num_failures        = (stderr => 0, stdout => 0, 
                            stderrB => 0, stdoutB => 0,
                            post => 0);
+my %num_results         = ();
 
 # Default valgrind to use is this build tree's (uninstalled) one
 my $valgrind = "./coregrind/valgrind";
@@ -194,7 +195,7 @@ my $default_stderr_filter = "filter_stderr";
 
 # open overall testsuite log that will contain records of all
 # subdirectory tests; it's not in automake format, but then again
-# nor are the per-subdirectory ones used as presence-flags for bunsen
+# nor are the per-subdirectory ones used as presence-flags for bunseno
 open(TSLOG, '>', 'test-suite-overall.log') or die $!;
 
 
@@ -382,12 +383,11 @@ sub read_vgtest_file($)
 #----------------------------------------------------------------------------
 # Since most of the program time is spent in system() calls, need this to
 # propagate a Ctrl-C enabling us to quit.
-sub mysystem($$) 
+sub mysystem($@) 
 {
-    my ($cmd, $tslog) = @_;
-
-    print $tslog scalar localtime, " executing $_[0]\n";
-    my $exit_code = system($_[0]);
+    my $tslog = shift(@_);
+    print $tslog scalar localtime, " executing @_\n";
+    my $exit_code = system(@_);
     print $tslog scalar localtime, " rc $exit_code\n";
     ($exit_code == 2) and exit 1;      # 2 is SIGINT
     return $exit_code;
@@ -398,7 +398,7 @@ sub mysystem($$)
 sub filtered_rename($$$) 
 {
     if ($keepunfiltered == 1) {
-        mysystem("cp  $_[1] $_[1].unfiltered.out", $_[2]);
+        mysystem($_[2], "cp  $_[1] $_[1].unfiltered.out");
     }
     rename ($_[0], $_[1]);
 }
@@ -435,7 +435,7 @@ sub do_diffs($$$$$)
                 ($f_exp eq "/dev/null") or die "Unexpected .exp file: $f_exp\n";
             }
 
-            mysystem("@DIFF@ $f_exp $name.$mid.out > $name.$mid.diff$n", $tslog);
+            mysystem($tslog, "@DIFF@ $f_exp $name.$mid.out > $name.$mid.diff$n");
             open (F,"<","$name.$mid.diff$n");
             while (<F>) { print $tslog $_; }
             close (F);
@@ -479,13 +479,15 @@ sub do_one_test($$)
     open(VGTESTLOG,">","$vgtest.log") or die $!;    
     
     if (defined $prereq) {
-        my $prereq_res = system("/bin/sh", "-c", $prereq);
+        my $prereq_res = mysystem(*VGTESTLOG, "/bin/sh", "-c", $prereq);
         if (0 == $prereq_res) {
             # Do nothing (ie. continue with the test)
         } elsif (256 == $prereq_res) {
             # Nb: weird Perl-ism -- exit code of '1' is seen by Perl as 256...
             # Prereq failed, skip.
             printf("%-16s (skipping, prereq failed: $prereq)\n", "$name:");
+            print VGTESTLOG scalar localtime, " skipping, prereq failed";
+            close(VGTESTLOG);
             return "SKIP";
         } else {
             # Bad prereq; abort.
@@ -508,15 +510,15 @@ sub do_one_test($$)
         # Note: redirection of stdout and stderr is before $progB to allow argsB
         # to e.g. redirect stdoutB to stderrB
         if (defined $stdinB) {
-            mysystem("(rm -f progB.done;"
+            mysystem(*VGTESTLOG, "(rm -f progB.done;"
                      . " < $stdinB > $name.stdoutB.out 2> $name.stderrB.out"
                      . " $envBvars $progB $argsB;"
-                     . "touch progB.done) &", *VGTESTLOG);
+                     . "touch progB.done) &");
         } else {
-            mysystem("(rm -f progB.done;"
+            mysystem(*VGTESTLOG, "(rm -f progB.done;"
                      . " > $name.stdoutB.out 2> $name.stderrB.out"
                      . "$envBvars $progB $argsB;"
-                     . "touch progB.done)  &", *VGTESTLOG);
+                     . "touch progB.done)  &");
         }
     } else {
         printf("%-16s valgrind $extraopts $vgopts $prog $args\n", "$name:");
@@ -533,7 +535,8 @@ sub do_one_test($$)
     my $tool=determine_tool();
     if (defined $outer_valgrind ) {
         # in an outer-inner setup, only set VALGRIND_LIB_INNER
-        mysystem(   "$envvars VALGRIND_LIB_INNER=$valgrind_lib "
+        mysystem(*VGTESTLOG,
+                    "$envvars VALGRIND_LIB_INNER=$valgrind_lib "
                   . "$outer_valgrind "
                   . "--tool=" . $outer_tool . " "
                   . "--log-file=" . "$name.outer.log "
@@ -541,14 +544,15 @@ sub do_one_test($$)
                   . "$valgrind --command-line-only=yes --memcheck:leak-check=no "
                   . "--sim-hints=no-inner-prefix "
                   . "--tool=$tool $extraopts $vgopts "
-                  . "$prog $args > $name.stdout.out 2> $name.stderr.out", *VGTESTLOG);
+                  . "$prog $args > $name.stdout.out 2> $name.stderr.out");
     } else {
         # Set both VALGRIND_LIB and VALGRIND_LIB_INNER in case this Valgrind
         # was configured with --enable-inner.
-        mysystem(   "$envvars VALGRIND_LIB=$valgrind_lib VALGRIND_LIB_INNER=$valgrind_lib "
+        mysystem(*VGTESTLOG,
+                    "$envvars VALGRIND_LIB=$valgrind_lib VALGRIND_LIB_INNER=$valgrind_lib "
                   . "$valgrind --command-line-only=yes --memcheck:leak-check=no "
                   . "--tool=$tool $extraopts $vgopts "
-                  . "$prog $args > $name.stdout.out 2> $name.stderr.out", *VGTESTLOG);
+                  . "$prog $args > $name.stdout.out 2> $name.stderr.out");
     }
 
     # Transcribe stdout, stderr
@@ -564,7 +568,8 @@ sub do_one_test($$)
     # Filter stdout
     if (defined $stdout_filter) {
         $stdout_filter_args = $name if (! defined $stdout_filter_args);
-        mysystem("$stdout_filter $stdout_filter_args < $name.stdout.out > $tmp", *VGTESTLOG);
+        mysystem(*VGTESTLOG,
+                 "$stdout_filter $stdout_filter_args < $name.stdout.out > $tmp");
         filtered_rename($tmp, "$name.stdout.out", *VGTESTLOG);
     }
     # Find all the .stdout.exp files.  If none, use /dev/null.
@@ -575,7 +580,8 @@ sub do_one_test($$)
     
     # Filter stderr
     $stderr_filter_args = $name if (! defined $stderr_filter_args);
-    mysystem("$stderr_filter $stderr_filter_args < $name.stderr.out > $tmp", *VGTESTLOG);
+    mysystem(*VGTESTLOG,
+             "$stderr_filter $stderr_filter_args < $name.stderr.out > $tmp");
     filtered_rename($tmp, "$name.stderr.out", *VGTESTLOG);
     # Find all the .stderr.exp files.  At least one must exist.
     my @stderr_exps = <$name.stderr.exp*>;
@@ -610,7 +616,8 @@ sub do_one_test($$)
         # Filter stdout
         if (defined $stdoutB_filter) {
             $stdoutB_filter_args = $name if (! defined $stdoutB_filter_args);
-            mysystem("$stdoutB_filter $stdoutB_filter_args < $name.stdoutB.out > $tmp", *VGTESTLOG);
+            mysystem(*VGTESTLOG,
+                     "$stdoutB_filter $stdoutB_filter_args < $name.stdoutB.out > $tmp");
             filtered_rename($tmp, "$name.stdoutB.out", *VGTESTLOG);
         }
         # Find all the .stdoutB.exp files.  If none, use /dev/null.
@@ -621,7 +628,8 @@ sub do_one_test($$)
         
         # Filter stderr
         $stderrB_filter_args = $name if (! defined $stderrB_filter_args);
-        mysystem("$stderrB_filter $stderrB_filter_args < $name.stderrB.out > $tmp", *VGTESTLOG);
+        mysystem(*VGTESTLOG,
+                 "$stderrB_filter $stderrB_filter_args < $name.stderrB.out > $tmp");
         filtered_rename($tmp, "$name.stderrB.out", *VGTESTLOG);
         # Find all the .stderrB.exp files.  At least one must exist.
         my @stderrB_exps = <$name.stderrB.exp*>;
@@ -632,7 +640,7 @@ sub do_one_test($$)
 
     # Maybe do post-test check
     if (defined $post) {
-	my $postrc = mysystem("$post > $name.post.out", *VGTESTLOG);
+	my $postrc = mysystem(*VGTESTLOG, "$post > $name.post.out");
         # Transcribe stdout
         print VGTESTLOG scalar localtime, " post:\n";
         open (F,"<","$name.post.out");
@@ -651,11 +659,11 @@ sub do_one_test($$)
     }
  
     if (defined $cleanup) {
-        (mysystem("$cleanup", *VGTESTLOG) == 0) or 
+        (mysystem(*VGTESTLOG, "$cleanup") == 0) or 
             print("(cleanup operation failed: $cleanup)\n");
     }
 
-    close(VGTESTLOG) or die $!;
+    close(VGTESTLOG);
     $num_tests_done++;
     return $rc;
 }
@@ -707,7 +715,14 @@ sub test_one_dir($$)
         } elsif ($f =~ /\.vgtest$/) {
             open(TSDIRLOG,">>","test-suite.log") or die $!; # it's enough for the per-directory file to exist for bunsen
             my $result = do_one_test($full_dir, $f);
-            print TSLOG scalar localtime, " result: $result $full_dir/$f.log\n";             
+            print TSLOG scalar localtime, " result: $result $full_dir/$f.log\n";
+            $num_results{$result} ++;
+            if ($result ne "PASS") {
+               # transcribe .log file into the overall log.
+               open(LOGFILE, "< $f.log") || die "Cannot open $f.log";
+               while (<LOGFILE>) { print TSLOG "\t$_"; }
+               close(LOGFILE);
+            }
             open(VGTESTTRS,">","$f.trs") or die "$!";
             print VGTESTTRS ":test-result: $result\n";
             print VGTESTTRS ":global-test-result: $result\n";
@@ -755,6 +770,13 @@ sub summarise_results
         print "$failure\n";
     }
     print "\n";
+
+    # automake style summarize in TSLOG also
+    print TSLOG "\n\nResults\n";
+    while (my ($k,$v) = each %num_results) {
+        printf TSLOG "# %5s: %d\n", $k, $v;
+    }
+    printf TSLOG "# %5s: %d\n", "total", $num_tests_done;
 }
 
 #----------------------------------------------------------------------------
@@ -798,6 +820,13 @@ while (1) { # we will exit after one loop, unless looptillfail
             
             my $result = do_one_test($dir, $file);
             print TSLOG scalar localtime, " result: $result $dir/$file.log\n";
+            $num_results{$result} ++;
+            if ($result ne "PASS") {
+               # transcribe .log file into the overall log.
+               open(LOGFILE, "< $file.log") || die "Cannot open $file.log";
+               while (<LOGFILE>) { print TSLOG "\t$_"; }
+               close(LOGFILE);
+            }
             open(VGTESTTRS,">","$dir/$file.trs") or die $!;
             print VGTESTTRS ":test-result: $result\n";
             print VGTESTTRS ":global-test-result: $result\n";

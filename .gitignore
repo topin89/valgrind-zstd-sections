@@ -2448,4 +2448,4 @@
 
 *.vgtest*.trs
 *.vgtest*.log
-test-suite.log
+test-suite*.log
