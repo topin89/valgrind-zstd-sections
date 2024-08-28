@@ -585,6 +585,12 @@ cdebug_zlib_gnu_SOURCES = cdebug.c
 cdebug_zlib_gnu_CFLAGS = $(AM_CFLAGS) -g -gz=zlib-gnu @FLAG_W_NO_UNINITIALIZED@
 endif
 
+if GZ_ZSTD
+check_PROGRAMS += cdebug_zstd
+cdebug_zlib_gnu_SOURCES = cdebug.c
+cdebug_zlib_gnu_CFLAGS = $(AM_CFLAGS) -g -gz=zstd @FLAG_W_NO_UNINITIALIZED@
+endif
+
 if HAVE_SBRK
 check_PROGRAMS += brk2
 endif
